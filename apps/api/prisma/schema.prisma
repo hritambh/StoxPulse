@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  name          String?
+  pushToken     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  watchlist     Watchlist[]
+  refreshTokens RefreshToken[]
+  feedItems     UserFeed[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Stock {
+  id          String                 @id @default(uuid())
+  symbol      String                 @unique
+  name        String
+  exchange    String                 @default("NSE")
+  sector      String?
+  logoUrl     String?
+  aliases     Json                   @default("[]")
+  symbolToken String?
+  createdAt   DateTime               @default(now())
+  prices      StockPrice[]
+  watchers    Watchlist[]
+  articleLinks ArticleStockRelation[]
+
+  @@map("stocks")
+}
+
+model Watchlist {
+  id      String   @id @default(uuid())
+  userId  String
+  stockId String
+  addedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock   Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockId])
+  @@map("watchlists")
+}
+
+model StockPrice {
+  id            String   @id @default(uuid())
+  stockId       String
+  open          Float
+  current       Float
+  dayHigh       Float?
+  dayLow        Float?
+  dayChangePct  Float
+  fetchedAt     DateTime @default(now())
+  stock         Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([stockId, fetchedAt])
+  @@map("stock_prices")
+}
+
+model NewsArticle {
+  id          String                 @id @default(uuid())
+  headline    String
+  summary     String?
+  content     String?
+  sourceName  String
+  sourceUrl   String
+  imageUrl    String?
+  publishedAt DateTime
+  hash        String                 @unique
+  createdAt   DateTime               @default(now())
+  stockLinks  ArticleStockRelation[]
+  analysis    NewsAnalysis?
+  feedItems   UserFeed[]
+
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@map("news_articles")
+}
+
+model ArticleStockRelation {
+  id             String      @id @default(uuid())
+  articleId      String
+  stockId        String
+  relevanceScore Float       @default(0)
+  article        NewsArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  stock          Stock       @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, stockId])
+  @@index([stockId])
+  @@map("article_stock_relations")
+}
+
+model NewsAnalysis {
+  id              String      @id @default(uuid())
+  articleId       String      @unique
+  sentiment       String      // bullish, bearish, neutral
+  confidence      Float
+  aiSummary       String
+  reasoning       Json        @default("[]")
+  impactScore     Float       @default(0)
+  createdAt       DateTime    @default(now())
+  article         NewsArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([sentiment])
+  @@map("news_analysis")
+}
+
+model UserFeed {
+  id           String      @id @default(uuid())
+  userId       String
+  articleId    String
+  rankingScore Float       @default(0)
+  seen         Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article      NewsArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@index([userId, rankingScore])
+  @@index([userId, createdAt])
+  @@map("user_feed")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      String   @default("price_drop")
+  metadata  Json     @default("{}")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@map("notifications")
+}

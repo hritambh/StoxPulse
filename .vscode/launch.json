@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API: Attach Debugger",
+      "type": "node",
+      "request": "attach",
+      "port": 9232,
+      "restart": true,
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}/apps/api",
+      "outFiles": ["${workspaceFolder}/apps/api/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Mobile: Attach Debugger",
+      "type": "node",
+      "request": "attach",
+      "port": 8081,
+      "restart": true,
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

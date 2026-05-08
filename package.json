@@ -1,0 +1,16 @@
+{
+  "name": "stoxpulse",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "api": "npm run start --workspace=apps/api",
+    "mobile": "REACT_NATIVE_PACKAGER_HOSTNAME=0.0.0.0 npm start --workspace=apps/mobile",
+
+    "db:migrate": "npm run prisma:migrate --workspace=apps/api",
+    "db:generate": "npm run prisma:generate --workspace=apps/api",
+    "db:studio": "npm run prisma:studio --workspace=apps/api"
+  }
+}
