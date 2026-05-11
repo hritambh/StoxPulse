@@ -63,8 +63,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_URL: amqp://stoxpulse:stoxpulse123@rabbitmq:5672
-      OPENAI_API_KEY: your-openai-api-key
-      NEWS_API_KEY: your-newsapi-key
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-your-openai-api-key}
+      NEWS_API_KEY: ${NEWS_API_KEY:-your-newsapi-key}
+      ANGEL_API_KEY: ${ANGEL_API_KEY:-}
+      ANGEL_CLIENT_CODE: ${ANGEL_CLIENT_CODE:-}
+      ANGEL_MPIN: ${ANGEL_MPIN:-}
+      ANGEL_TOTP_SECRET: ${ANGEL_TOTP_SECRET:-}
       PORT: 3000
 
 volumes:

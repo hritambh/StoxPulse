@@ -1,10 +1,12 @@
 import { Platform } from 'react-native';
 import axios from 'axios';
+import Constants from 'expo-constants';
 
 const TOKEN_KEY = 'stoxpulse_token';
 const REFRESH_TOKEN_KEY = 'stoxpulse_refresh_token';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE =
+  Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000';
 
 const api = axios.create({
   baseURL: API_BASE,

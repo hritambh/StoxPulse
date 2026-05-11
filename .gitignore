@@ -8,3 +8,6 @@ android/
 *.tsbuildinfo
 coverage/
 .DS_Store
+google-play-key.json
+*.jks
+*.keystore

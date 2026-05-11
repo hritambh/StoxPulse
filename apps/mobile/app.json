@@ -32,6 +32,12 @@
           "color": "#0f172a"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "apiUrl": "https://stoxpulse-api.onrender.com",
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
   }
 }
