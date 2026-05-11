@@ -11,7 +11,7 @@ RUN npm ci --workspace=apps/api --include-workspace-root
 WORKDIR /app/apps/api
 RUN npx prisma generate
 COPY apps/api/ ./
-RUN npm run build
+RUN /app/node_modules/.bin/nest build
 
 FROM node:20-alpine
 
