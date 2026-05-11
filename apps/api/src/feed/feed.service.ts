@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { FeedRankingService } from './feed-ranking.service';
+import { NewsIngestionService } from '../news/news-ingestion.service';
 
 const FEED_CACHE_TTL = 120;
 
@@ -13,6 +14,7 @@ export class FeedService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly feedRanking: FeedRankingService,
+    private readonly newsIngestion: NewsIngestionService,
   ) {}
 
   async getUserFeed(userId: string, cursor?: string, limit: number = 20) {
@@ -153,13 +155,13 @@ export class FeedService {
     if (watchlist.length === 0) return;
 
     const stockIds = watchlist.map((w) => w.stockId);
-    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const cutoff = new Date(Date.now() - 100 * 60 * 60 * 1000);
 
     const articles = await this.prisma.newsArticle.findMany({
       where: {
         publishedAt: { gte: cutoff },
         analysis: { isNot: null },
-        stockLinks: { some: { stockId: { in: stockIds } } },
+        // stockLinks: { some: { stockId: { in: stockIds } } },
       },
       include: {
         analysis: true,
@@ -172,6 +174,7 @@ export class FeedService {
 
     for (const article of articles) {
       const analysis = article.analysis!;
+      if (article.stockLinks.length === 0) continue;
       const maxRelevance = Math.max(
         ...article.stockLinks.map((l) => l.relevanceScore),
       );
@@ -188,8 +191,8 @@ export class FeedService {
           userId_articleId: { userId, articleId: article.id },
         },
         create: {
-          userId,
-          articleId: article.id,
+          user: { connect: { id: userId } },
+          article: { connect: { id: article.id } },
           rankingScore,
         },
         update: { rankingScore },
@@ -200,5 +203,36 @@ export class FeedService {
     this.logger.log(
       `Feed rebuilt for user ${userId}: ${articles.length} articles scored`,
     );
+  }
+
+  async forceRefresh(userId: string) {
+    const watchlist = await this.prisma.watchlist.findMany({
+      where: { userId },
+      include: { stock: { select: { symbol: true, name: true, aliases: true } } },
+    });
+
+    if (watchlist.length === 0) {
+      return { ingested: 0, message: 'No stocks in watchlist' };
+    }
+
+    this.logger.log(`Force refresh: fetching news for ${watchlist.length} stocks`);
+
+    let totalIngested = 0;
+    for (const item of watchlist) {
+      let aliases = Array.isArray(item?.stock?.aliases) ? item.stock.aliases as string[] : [];
+      // aliases = ['suzlon', 'suzlon energy', 'suzlon energy ltd', 'suzlon energy ltd.'];
+      const count = await this.newsIngestion.fetchNewsForStock({
+        symbol: item.stock.symbol,
+        name: item.stock.name,
+        aliases,
+      });
+      totalIngested += count;
+    }
+
+    await this.buildFeedForUser(userId);
+
+    this.logger.log(`Force refresh complete: ${totalIngested} new articles ingested`);
+
+    return this.getUserFeed(userId, undefined, 20);
   }
 }

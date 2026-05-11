@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../prisma/prisma.service';
+import { NEWS_ANALYSIS_PROMPT } from '../common/prompts';
 
 interface AnalysisResult {
   sentiment: 'bullish' | 'bearish' | 'neutral';
@@ -10,16 +11,6 @@ interface AnalysisResult {
   concise_summary: string;
   key_reasons: string[];
 }
-
-const SYSTEM_PROMPT = `You are a financial news analyst. Analyze the provided news article.
-Return ONLY valid JSON with these fields:
-- sentiment: "bullish" | "bearish" | "neutral"
-- confidence_score: number between 0-100
-- impact_score: number between 0-100
-- concise_summary: string (2-4 concise sentences)
-- key_reasons: string[] (max 3 reasons)
-
-Do NOT provide financial advice. Do NOT say buy or sell. Be concise and factual.`;
 
 @Injectable()
 export class AiAnalysisService {
@@ -68,7 +59,7 @@ export class AiAnalysisService {
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: NEWS_ANALYSIS_PROMPT },
           { role: 'user', content: articleText },
         ],
         temperature: 0.3,

@@ -12,6 +12,7 @@ export interface AuthResponse {
 
 export interface StockSearchResult {
   symbol: string;
+  token: string;
   name: string;
   exchange: string;
 }

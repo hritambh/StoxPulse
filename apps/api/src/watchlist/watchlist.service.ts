@@ -47,20 +47,24 @@ export class WatchlistService {
     symbol: string,
     token: string,
     exchange = 'NSE',
+    searchName?: string,
   ) {
     const upperSymbol = symbol.toUpperCase();
 
     const quote = await this.stockService.getQuote(upperSymbol, token, exchange);
+    const bestName = searchName || quote.name;
+    const aliases = await this.stockService.generateAliases(upperSymbol, bestName);
 
     const stock = await this.prisma.stock.upsert({
       where: { symbol: upperSymbol },
       create: {
         symbol: upperSymbol,
-        name: quote.name,
+        name: bestName,
         exchange,
         symbolToken: token,
+        aliases,
       },
-      update: { name: quote.name, symbolToken: token },
+      update: { name: bestName, symbolToken: token, aliases },
     });
 
     const existing = await this.prisma.watchlist.findUnique({

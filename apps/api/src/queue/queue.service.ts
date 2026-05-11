@@ -25,13 +25,17 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     const url = this.config.get('RABBITMQ_URL', 'amqp://localhost:5672');
 
-    this.connection = amqp.connect([url]);
+    this.connection = amqp.connect([url], {
+      heartbeatIntervalInSeconds: 30,
+      reconnectTimeInSeconds: 5,
+    });
     this.connection.on('connect', () => this.logger.log('RabbitMQ connected'));
     this.connection.on('disconnect', (err) =>
       this.logger.warn('RabbitMQ disconnected', err?.err?.message),
     );
 
     this.channel = this.connection.createChannel({
+      json: false,
       setup: async (ch: ConfirmChannel) => {
         await Promise.all(
           Object.values(QUEUES).map((q) =>
@@ -54,7 +58,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   async consume(
     queue: string,
     handler: (data: any) => Promise<void>,
-    prefetch = 5,
+    prefetch = 3,
   ): Promise<void> {
     await this.channel.addSetup(async (ch: ConfirmChannel) => {
       await ch.prefetch(prefetch);
@@ -63,17 +67,31 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         try {
           const data = JSON.parse(msg.content.toString());
           await handler(data);
-          ch.ack(msg);
+          try {
+            ch.ack(msg);
+          } catch {
+            this.logger.warn(`Failed to ack message on ${queue} (channel likely closed)`);
+          }
         } catch (err) {
-          this.logger.error(`Error processing message from ${queue}`, err);
-          ch.nack(msg, false, false);
+          this.logger.error(
+            `Error processing message from ${queue}: ${err instanceof Error ? err.message : err}`,
+          );
+          try {
+            ch.nack(msg, false, false);
+          } catch {
+            this.logger.warn(`Failed to nack message on ${queue} (channel likely closed)`);
+          }
         }
       });
     });
   }
 
   async onModuleDestroy() {
-    await this.channel?.close();
-    await this.connection?.close();
+    try {
+      await this.channel?.close();
+    } catch { /* already closed */ }
+    try {
+      await this.connection?.close();
+    } catch { /* already closed */ }
   }
 }

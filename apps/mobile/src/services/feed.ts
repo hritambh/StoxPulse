@@ -22,3 +22,8 @@ export async function getArticleDetail(
 export async function markArticleSeen(articleId: string): Promise<void> {
   await api.patch(`/feed/${articleId}/seen`);
 }
+
+export async function forceRefreshFeed(): Promise<FeedResponse> {
+  const { data } = await api.post<FeedResponse>('/feed/refresh');
+  return data;
+}

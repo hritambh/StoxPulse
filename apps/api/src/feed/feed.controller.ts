@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Param,
   Query,
@@ -32,6 +33,11 @@ export class FeedController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
   ) {
     return this.feedService.getUserFeed(user.sub, cursor, limit);
+  }
+
+  @Post('refresh')
+  forceRefresh(@CurrentUser() user: JwtPayload) {
+    return this.feedService.forceRefresh(user.sub);
   }
 
   @Get(':articleId')

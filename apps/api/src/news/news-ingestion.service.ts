@@ -17,10 +17,15 @@ interface NormalizedArticle {
   hash: string;
 }
 
+interface StockInfo {
+  symbol: string;
+  name: string;
+  aliases: string[];
+}
+
 @Injectable()
 export class NewsIngestionService {
   private readonly logger = new Logger(NewsIngestionService.name);
-  private readonly finnhubKey: string;
   private readonly newsApiKey: string;
 
   constructor(
@@ -29,22 +34,17 @@ export class NewsIngestionService {
     private readonly stockRelevance: StockRelevanceService,
     private readonly queueService: QueueService,
   ) {
-    this.finnhubKey = this.config.get<string>('FINNHUB_API_KEY', '');
     this.newsApiKey = this.config.get<string>('NEWS_API_KEY', '');
   }
 
-  async fetchNewsForStock(symbol: string): Promise<number> {
-    let ingested = 0;
-
-    if (this.finnhubKey) {
-      ingested += await this.fetchFromFinnhub(symbol);
+  async fetchNewsForStock(stock: StockInfo): Promise<number> {
+    if (!this.newsApiKey) {
+      this.logger.warn('NEWS_API_KEY not configured, skipping stock news');
+      return 0;
     }
 
-    if (this.newsApiKey) {
-      ingested += await this.fetchFromNewsApi(symbol);
-    }
-
-    return ingested;
+    const query = this.buildStockQuery(stock);
+    return this.fetchFromNewsApi(query, stock.symbol, stock);
   }
 
   async fetchBroadMarketNews(): Promise<number> {
@@ -73,63 +73,56 @@ export class NewsIngestionService {
     }
   }
 
-  private async fetchFromFinnhub(symbol: string): Promise<number> {
-    try {
-      const to = new Date();
-      const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+  /**
+   * Build an OR-joined query from the stock's name and aliases
+   * so NewsAPI returns more relevant results for Indian stocks.
+   * e.g. "Reliance Industries" OR "RIL" OR "Mukesh Ambani company"
+   */
+  private buildStockQuery(stock: StockInfo): string {
+    const terms: string[] = [];
 
-      const { data } = await axios.get(
-        'https://finnhub.io/api/v1/company-news',
-        {
-          params: {
-            symbol,
-            from: this.formatDate(from),
-            to: this.formatDate(to),
-            token: this.finnhubKey,
-          },
-          timeout: 10_000,
-        },
-      );
+    terms.push(`"${stock.name}"`);
 
-      if (!Array.isArray(data)) return 0;
-
-      const articles = this.normalizeFinnhubArticles(data);
-      this.logger.debug(
-        `Finnhub returned ${data.length} articles for ${symbol}`,
-      );
-
-      return this.storeArticles(articles);
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch Finnhub news for ${symbol}`,
-        error instanceof Error ? error.message : error,
-      );
-      return 0;
+    if (stock.symbol.length >= 3) {
+      terms.push(stock.symbol);
     }
+
+    const aliases = this.parseAliases(stock.aliases);
+    for (const alias of aliases.slice(0, 3)) {
+      if (alias.length >= 3 && alias !== stock.symbol && alias !== stock.name) {
+        terms.push(`"${alias}"`);
+      }
+    }
+
+    return terms.join(' OR ');
   }
 
-  private async fetchFromNewsApi(symbol: string): Promise<number> {
+  private async fetchFromNewsApi(
+    query: string,
+    symbol: string,
+    forStock?: StockInfo,
+  ): Promise<number> {
     try {
-      const { data } = await axios.get(
-        'https://newsapi.org/v2/everything',
-        {
-          params: {
-            q: symbol,
-            sortBy: 'publishedAt',
-            language: 'en',
-            pageSize: 20,
-            apiKey: this.newsApiKey,
-          },
-          timeout: 10_000,
-        },
-      );
+      const url = 'https://newsapi.org/v2/everything';
+      const params = {
+        q: query,
+        sortBy: 'publishedAt',
+        language: 'en',
+        pageSize: 30,
+        apiKey: this.newsApiKey,
+      };
+
+      const { data } = await axios.get(url, {
+        params,
+        timeout: 10_000,
+      });
 
       const articles = this.normalizeNewsApiArticles(data.articles ?? []);
-      this.logger.debug(
+      this.logger.log(
         `NewsAPI returned ${(data.articles ?? []).length} articles for ${symbol}`,
       );
 
-      return this.storeArticles(articles);
+      return this.storeArticles(articles, forStock);
     } catch (error) {
       this.logger.error(
         `Failed to fetch NewsAPI news for ${symbol}`,
@@ -139,7 +132,10 @@ export class NewsIngestionService {
     }
   }
 
-  private async storeArticles(articles: NormalizedArticle[]): Promise<number> {
+  private async storeArticles(
+    articles: NormalizedArticle[],
+    forStock?: StockInfo,
+  ): Promise<number> {
     let stored = 0;
 
     for (const article of articles) {
@@ -157,6 +153,9 @@ export class NewsIngestionService {
 
         stored++;
 
+        if (forStock) {
+          await this.forceLink(created.id, forStock.symbol);
+        }
         await this.stockRelevance.mapArticleToStocks(created.id);
         await this.queueService.publish(QUEUES.NEWS_ANALYSIS, {
           articleId: created.id,
@@ -172,24 +171,25 @@ export class NewsIngestionService {
     return stored;
   }
 
-  private normalizeFinnhubArticles(raw: any[]): NormalizedArticle[] {
-    return raw
-      .filter((a) => a.headline && a.url)
-      .map((a) => ({
-        headline: String(a.headline).trim(),
-        summary: a.summary ? String(a.summary).trim() : null,
-        content: null,
-        sourceName: a.source ? String(a.source) : 'Finnhub',
-        sourceUrl: String(a.url),
-        imageUrl: a.image ? String(a.image) : null,
-        publishedAt: new Date(a.datetime * 1000),
-        hash: this.generateHash(a.headline, a.source ?? 'Finnhub'),
-      }));
+  private async forceLink(articleId: string, symbol: string): Promise<void> {
+    const stock = await this.prisma.stock.findUnique({
+      where: { symbol: symbol.toUpperCase() },
+      select: { id: true },
+    });
+    if (!stock) return;
+
+    await this.prisma.articleStockRelation.upsert({
+      where: {
+        articleId_stockId: { articleId, stockId: stock.id },
+      },
+      create: { articleId, stockId: stock.id, relevanceScore: 10 },
+      update: {},
+    });
   }
 
   private normalizeNewsApiArticles(raw: any[]): NormalizedArticle[] {
     return raw
-      .filter((a) => a.title && a.url)
+      .filter((a) => a.title && a.url && a.title !== '[Removed]')
       .map((a) => ({
         headline: String(a.title).trim(),
         summary: a.description ? String(a.description).trim() : null,
@@ -207,7 +207,16 @@ export class NewsIngestionService {
     return createHash('sha256').update(normalized).digest('hex');
   }
 
-  private formatDate(date: Date): string {
-    return date.toISOString().split('T')[0];
+  private parseAliases(aliases: unknown): string[] {
+    if (Array.isArray(aliases)) return aliases.filter((a) => typeof a === 'string');
+    if (typeof aliases === 'string') {
+      try {
+        const parsed = JSON.parse(aliases);
+        return Array.isArray(parsed) ? parsed.filter((a: unknown) => typeof a === 'string') : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   }
 }

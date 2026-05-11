@@ -27,7 +27,11 @@ export default function SearchScreen() {
   const handleAdd = async (stock: StockSearchResult) => {
     setAddingSymbol(stock.symbol);
     try {
-      await api.post(`/watchlist/${stock.symbol}`);
+      await api.post(`/watchlist/${stock.symbol}`, {
+        token: stock.token,
+        exchange: stock.exchange,
+        name: stock.name,
+      });
       Alert.alert('Added', `${stock.symbol} added to your watchlist`);
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to add stock';

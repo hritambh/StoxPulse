@@ -4,13 +4,14 @@ import {
   Post,
   Delete,
   Param,
-  Query,
+  Body,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { WatchlistService } from './watchlist.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
+import { AddStockDto } from './dto/add-stock.dto';
 
 @ApiTags('Watchlist')
 @ApiBearerAuth()
@@ -30,19 +31,17 @@ export class WatchlistController {
   }
 
   @Post(':symbol')
-  @ApiQuery({ name: 'token', required: true, description: 'Angel One symbol token' })
-  @ApiQuery({ name: 'exchange', required: false, description: 'NSE or BSE (default: NSE)' })
   addStock(
     @CurrentUser() user: JwtPayload,
     @Param('symbol') symbol: string,
-    @Query('token') token: string,
-    @Query('exchange') exchange?: string,
+    @Body() dto: AddStockDto,
   ) {
     return this.watchlistService.addStock(
       user.sub,
       symbol,
-      token,
-      exchange || 'NSE',
+      dto.token,
+      dto.exchange || 'NSE',
+      dto.name,
     );
   }
 

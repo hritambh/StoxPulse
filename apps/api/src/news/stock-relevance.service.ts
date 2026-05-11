@@ -49,7 +49,7 @@ export class StockRelevanceService {
     for (const target of targets) {
       const score = this.calculateScore(target, headline, body);
 
-      if (score >= 5) {
+      if (score >= 2) {
         matches.push({ stockId: target.id, relevanceScore: score });
       }
     }

@@ -20,7 +20,7 @@ StoxPulse/
 │   │   │   ├── stock/                    # Angel One market data
 │   │   │   ├── watchlist/                # Watchlist CRUD
 │   │   │   ├── news/                     # News ingestion pipeline
-│   │   │   │   ├── news-ingestion        # Finnhub + NewsAPI fetcher
+│   │   │   │   ├── news-ingestion        # NewsAPI fetcher
 │   │   │   │   ├── stock-relevance       # Smart article→stock mapping
 │   │   │   │   └── news-cron             # 10-min scheduled fetch
 │   │   │   ├── ai-analysis/              # OpenAI sentiment analysis
@@ -72,7 +72,7 @@ StoxPulse/
 - **Push notifications** — price drops, sentiment alerts, earnings
 
 ### News Pipeline
-- **Multi-source ingestion** — Finnhub + NewsAPI, normalized and deduplicated
+- **News ingestion** — NewsAPI with smart stock name/alias queries, normalized and deduplicated
 - **Stock relevance engine** — ticker, company name, alias matching with scoring
 - **Async AI processing** — RabbitMQ workers, never in API request path
 - **Per-article analysis** — 1 article → 1 AI call → many users reuse
@@ -211,8 +211,7 @@ freshness_score = e^(-hours_old / 24) × 100
 | `REDIS_HOST` | Yes | Redis host |
 | `RABBITMQ_URL` | Yes | RabbitMQ AMQP URL |
 | `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `FINNHUB_API_KEY` | Optional | Finnhub news API |
-| `NEWS_API_KEY` | Optional | NewsAPI.org key |
+| `NEWS_API_KEY` | Yes | NewsAPI.org key |
 | `ANGEL_API_KEY` | Yes | Angel One SmartAPI |
 | `ANGEL_CLIENT_CODE` | Yes | Angel One client |
 | `ANGEL_MPIN` | Yes | Angel One MPIN |

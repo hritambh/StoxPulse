@@ -7,10 +7,12 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Pressable,
   ViewToken,
 } from 'react-native';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { getFeed, markArticleSeen } from '../services/feed';
+import { Ionicons } from '@expo/vector-icons';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { getFeed, markArticleSeen, forceRefreshFeed } from '../services/feed';
 import { FeedCard } from '../components/FeedCard';
 import type { FeedArticle } from '../types';
 
@@ -18,7 +20,9 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_HEIGHT = SCREEN_HEIGHT - 164;
 
 export default function FeedScreen() {
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [forceRefreshing, setForceRefreshing] = useState(false);
   const seenSet = useRef(new Set<string>());
 
   const {
@@ -64,6 +68,19 @@ export default function FeedScreen() {
     setRefreshing(false);
   }, [refetch]);
 
+  const handleForceRefresh = useCallback(async () => {
+    if (forceRefreshing) return;
+    setForceRefreshing(true);
+    try {
+      await forceRefreshFeed();
+      await queryClient.invalidateQueries({ queryKey: ['feed'] });
+    } catch (err) {
+      console.error('Force refresh failed:', err);
+    } finally {
+      setForceRefreshing(false);
+    }
+  }, [forceRefreshing, queryClient]);
+
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
@@ -90,18 +107,64 @@ export default function FeedScreen() {
 
   if (articles.length === 0) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyIcon}>📰</Text>
-        <Text style={styles.emptyTitle}>No news yet</Text>
-        <Text style={styles.emptySubtitle}>
-          Add stocks to your watchlist to see{'\n'}personalized AI-powered news
-        </Text>
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Feed</Text>
+          <Pressable
+            style={styles.refreshBtn}
+            onPress={handleForceRefresh}
+            disabled={forceRefreshing}
+            hitSlop={10}
+          >
+            {forceRefreshing ? (
+              <ActivityIndicator size="small" color="#3b82f6" />
+            ) : (
+              <Ionicons name="cloud-download-outline" size={22} color="#3b82f6" />
+            )}
+          </Pressable>
+        </View>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>📰</Text>
+          <Text style={styles.emptyTitle}>No news yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Add stocks to your watchlist, then tap{'\n'}the refresh button to fetch news
+          </Text>
+          <Pressable
+            style={[styles.fetchBtn, forceRefreshing && styles.fetchBtnDisabled]}
+            onPress={handleForceRefresh}
+            disabled={forceRefreshing}
+          >
+            {forceRefreshing ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={18} color="#fff" />
+                <Text style={styles.fetchBtnText}>Fetch News Now</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Feed</Text>
+        <Pressable
+          style={styles.refreshBtn}
+          onPress={handleForceRefresh}
+          disabled={forceRefreshing}
+          hitSlop={10}
+        >
+          {forceRefreshing ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Ionicons name="cloud-download-outline" size={22} color="#3b82f6" />
+          )}
+        </Pressable>
+      </View>
       <FlatList
         data={articles}
         keyExtractor={(item) => item.id}
@@ -144,6 +207,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#f8fafc',
+  },
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -166,6 +250,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 6,
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
   emptyIcon: {
     fontSize: 48,
     marginBottom: 16,
@@ -181,6 +271,24 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  fetchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 28,
+  },
+  fetchBtnDisabled: {
+    opacity: 0.6,
+  },
+  fetchBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   footerLoader: {
     paddingVertical: 20,

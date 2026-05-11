@@ -18,6 +18,11 @@ export class FeedWorker implements OnModuleInit {
       const { articleId } = data;
       this.logger.log(`Building feeds for article ${articleId}`);
 
+      const linked = await this.prisma.articleStockRelation.count({
+        where: { articleId },
+      });
+      this.logger.debug(`Article ${articleId} has ${linked} stock links`);
+
       const articleStocks = await this.prisma.articleStockRelation.findMany({
         where: { articleId },
         select: { stockId: true },

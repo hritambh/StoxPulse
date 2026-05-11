@@ -28,7 +28,7 @@ export class NewsCronService {
         where: {
           watchers: { some: {} },
         },
-        select: { id: true, symbol: true, name: true },
+        select: { id: true, symbol: true, name: true, aliases: true },
       });
 
       this.logger.log(`Found ${stocks.length} watched stock(s) for news fetch`);
@@ -37,7 +37,12 @@ export class NewsCronService {
 
       for (const stock of stocks) {
         try {
-          const count = await this.newsIngestion.fetchNewsForStock(stock.symbol);
+          const aliases = Array.isArray(stock.aliases) ? stock.aliases as string[] : [];
+          const count = await this.newsIngestion.fetchNewsForStock({
+            symbol: stock.symbol,
+            name: stock.name,
+            aliases,
+          });
           totalIngested += count;
           this.logger.debug(
             `Fetched ${count} new article(s) for ${stock.symbol}`,
