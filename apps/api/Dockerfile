@@ -1,20 +1,22 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-COPY package*.json ./
-COPY prisma ./prisma/
-RUN npm ci
-RUN npx prisma generate
-COPY . .
-RUN npm run build
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/api/prisma ./apps/api/prisma/
+RUN npm ci --workspace=apps/api --include-workspace-root
+RUN npx --prefix apps/api prisma generate
+COPY apps/api ./apps/api/
+RUN npm run build --workspace=apps/api
 
 FROM node:20-alpine
 
 WORKDIR /app
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/apps/api/package.json ./package.json
+COPY --from=builder /app/apps/api/prisma ./prisma
 
 EXPOSE 3000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]

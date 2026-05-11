@@ -2,8 +2,7 @@ services:
   - type: web
     name: stoxpulse-api
     runtime: docker
-    rootDir: apps/api
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: apps/api/Dockerfile
     plan: free
     envVars:
       - key: DATABASE_URL
