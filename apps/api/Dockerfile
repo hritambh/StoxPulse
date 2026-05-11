@@ -1,15 +1,21 @@
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/api/prisma ./apps/api/prisma/
 RUN npm ci --workspace=apps/api --include-workspace-root
-RUN npx --prefix apps/api prisma generate
-COPY apps/api ./apps/api/
-RUN npm run build --workspace=apps/api
+
+WORKDIR /app/apps/api
+RUN npx prisma generate
+COPY apps/api/ ./
+RUN npm run build
 
 FROM node:20-alpine
+
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 COPY --from=builder /app/apps/api/dist ./dist
