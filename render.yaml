@@ -38,7 +38,6 @@ services:
     runtime: static
     buildCommand: cd apps/mobile && npx expo export --platform web
     staticPublishPath: apps/mobile/dist
-    plan: free
     routes:
       - type: rewrite
         source: /*
